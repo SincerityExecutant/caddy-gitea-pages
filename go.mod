@@ -1,4 +1,4 @@
-module github.com/rsp2k/caddy-gitea-pages
+module github.com/SincerityExecutant/caddy-gitea-pages
 
 go 1.22
 
