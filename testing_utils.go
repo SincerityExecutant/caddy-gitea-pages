@@ -69,15 +69,15 @@ type MockRepo struct {
 }
 
 func (th *TestHelper) handleMockGiteaRequest(w http.ResponseWriter, r *http.Request, repos map[string]MockRepo) {
-	// Handle API requests
-	if strings.HasPrefix(r.URL.Path, "/api/v1/repos/") {
-		th.handleRepoAPI(w, r, repos)
+	// Handle archive requests before general API (archive URLs also start with /api/v1/repos/)
+	if strings.Contains(r.URL.Path, "/archive/") {
+		th.handleArchiveRequest(w, r, repos)
 		return
 	}
 
-	// Handle archive requests
-	if strings.Contains(r.URL.Path, "/archive/") {
-		th.handleArchiveRequest(w, r, repos)
+	// Handle API requests
+	if strings.HasPrefix(r.URL.Path, "/api/v1/repos/") {
+		th.handleRepoAPI(w, r, repos)
 		return
 	}
 
