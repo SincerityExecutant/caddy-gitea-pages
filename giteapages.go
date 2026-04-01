@@ -148,8 +148,21 @@ func (gp *GitteaPages) ServeHTTP(w http.ResponseWriter, r *http.Request, next ca
 		filePath = strings.Join(parts[2:], "/")
 	}
 
-	// If no file path specified, look for index files
+	// If no file path specified, ensure cache exists first, then look for index files
 	if filePath == "" {
+		repoKey := fmt.Sprintf("%s/%s", owner, repo)
+		if branch == "" {
+			branch = gp.DefaultBranch
+		}
+		if gp.shouldUpdateCache(repoKey, branch) {
+			if err := gp.updateRepoCache(owner, repo, branch); err != nil {
+				gp.logger.Warn("failed to update cache while looking for index file",
+					zap.String("owner", owner),
+					zap.String("repo", repo),
+					zap.String("branch", branch),
+					zap.Error(err))
+			}
+		}
 		filePath = gp.findIndexFile(owner, repo)
 		if filePath == "" {
 			return next.ServeHTTP(w, r)

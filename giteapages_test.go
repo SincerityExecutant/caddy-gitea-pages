@@ -1,6 +1,8 @@
 package giteapages
 
 import (
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -275,5 +277,44 @@ func TestShouldUpdateCache(t *testing.T) {
 	// Should update old entry
 	if !gp.shouldUpdateCache(repoKey, branch) {
 		t.Error("Expected shouldUpdateCache to return true for old entry")
+	}
+}
+
+// TestServeHTTP_EmptyFilePath_FirstVisit verifies that visiting /owner/repo/ on the
+// first request (cache not yet populated) correctly triggers a cache update and
+// serves the index file, rather than falling through to the next handler.
+func TestServeHTTP_EmptyFilePath_FirstVisit(t *testing.T) {
+	helper := NewTestHelper(t)
+	defer helper.Cleanup()
+
+	repos := map[string]MockRepo{
+		"testuser/testrepo": {
+			Name:          "testrepo",
+			FullName:      "testuser/testrepo",
+			DefaultBranch: "main",
+			Files: map[string]string{
+				"index.html": "<h1>Hello World</h1>",
+			},
+		},
+	}
+	helper.CreateMockGiteaServer(repos)
+
+	helper.SetupGiteaPages(GitteaPagesConfig{
+		GitteaURL:     helper.server.URL,
+		GitteaToken:   "test-token",
+		CacheTTL:      15 * time.Minute,
+		DefaultBranch: "main",
+	})
+
+	// First visit with no file path and no pre-populated cache.
+	w := helper.MakeHTTPRequest("GET", "/testuser/testrepo/", "", nil)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d on first visit (no cache), got %d. Body: %s",
+			http.StatusOK, w.Code, w.Body.String())
+	}
+
+	if !strings.Contains(w.Body.String(), "Hello World") {
+		t.Errorf("Expected response to contain 'Hello World', got: %s", w.Body.String())
 	}
 }
