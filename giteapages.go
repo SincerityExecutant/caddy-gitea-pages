@@ -155,12 +155,15 @@ func (gp *GitteaPages) ServeHTTP(w http.ResponseWriter, r *http.Request, next ca
 			branch = gp.DefaultBranch
 		}
 		if gp.shouldUpdateCache(repoKey, branch) {
-			if err := gp.updateRepoCache(owner, repo, branch); err != nil {
+			resolvedBranch, err := gp.updateRepoCache(owner, repo, branch)
+			if err != nil {
 				gp.logger.Warn("failed to update cache while looking for index file",
 					zap.String("owner", owner),
 					zap.String("repo", repo),
 					zap.String("branch", branch),
 					zap.Error(err))
+			} else {
+				branch = resolvedBranch
 			}
 		}
 		filePath = gp.findIndexFile(owner, repo)
@@ -194,9 +197,11 @@ func (gp *GitteaPages) serveFile(w http.ResponseWriter, r *http.Request, owner, 
 
 	// Check if we need to update the cache
 	if gp.shouldUpdateCache(repoKey, branch) {
-		if err := gp.updateRepoCache(owner, repo, branch); err != nil {
+		resolvedBranch, err := gp.updateRepoCache(owner, repo, branch)
+		if err != nil {
 			return fmt.Errorf("failed to update cache: %v", err)
 		}
+		branch = resolvedBranch
 	}
 
 	// Get cached repo path
@@ -240,14 +245,15 @@ func (gp *GitteaPages) shouldUpdateCache(repoKey, branch string) bool {
 	return time.Since(entry.lastUpdate) > time.Duration(gp.CacheTTL)
 }
 
-// updateRepoCache downloads and caches repository content
-func (gp *GitteaPages) updateRepoCache(owner, repo, branch string) error {
+// updateRepoCache downloads and caches repository content.
+// Returns the resolved branch name (may differ from the input when branch is empty).
+func (gp *GitteaPages) updateRepoCache(owner, repo, branch string) (string, error) {
 	repoKey := fmt.Sprintf("%s/%s", owner, repo)
 
 	// Get repository info from Gitea API
 	repoInfo, err := gp.getRepoInfo(owner, repo)
 	if err != nil {
-		return fmt.Errorf("failed to get repo info: %v", err)
+		return branch, fmt.Errorf("failed to get repo info: %v", err)
 	}
 
 	// Use provided branch, fallback to repo default, then module default
@@ -265,7 +271,7 @@ func (gp *GitteaPages) updateRepoCache(owner, repo, branch string) error {
 
 	cacheKey := fmt.Sprintf("%s:%s", repoKey, branch)
 	if err := gp.downloadAndExtractRepo(archiveURL, cacheKey); err != nil {
-		return fmt.Errorf("failed to download repo: %v", err)
+		return branch, fmt.Errorf("failed to download repo: %v", err)
 	}
 
 	// Update cache entry
@@ -280,7 +286,7 @@ func (gp *GitteaPages) updateRepoCache(owner, repo, branch string) error {
 		zap.String("repo", repoKey),
 		zap.String("branch", branch))
 
-	return nil
+	return branch, nil
 }
 
 // getRepoInfo fetches repository information from Gitea API
